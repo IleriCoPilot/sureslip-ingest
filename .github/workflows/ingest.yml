@@ -1,0 +1,42 @@
+name: SureSlip Ingestion
+
+on:
+  schedule:
+    - cron: '*/6 * * * *'   # Odds every 6 min
+    - cron: '*/12 * * * *'  # FootyStats every 12 min
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install node-fetch@^3
+
+      - name: Run Odds pipeline
+        if: github.event.schedule == '*/6 * * * *'
+        run: node fetch_odds.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ODDSAPI_KEY: ${{ secrets.ODDSAPI_KEY }}
+
+      - name: Run FootyStats pipeline
+        if: github.event.schedule == '*/12 * * * *'
+        run: node fetch_footystats.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FOOTYSTATS_API_KEY: ${{ secrets.FOOTYSTATS_API_KEY }}
+
+      - name: Slack alert on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            { "text": ":red_circle: SureSlip ingest failed on run ${{ github.run_id }}" }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
